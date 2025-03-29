@@ -12,7 +12,7 @@ const noteSchema = new mongoose.Schema(
     },
     fileType: {
       type: String,
-      enum: ["image", "pdf"],
+      enum: ["image/jpeg", "image/png", "application/pdf"],
       required: true,
     },
     uploadedAt: {
@@ -24,3 +24,5 @@ const noteSchema = new mongoose.Schema(
 );
 
 const Note = mongoose.model("Note", noteSchema);
+
+export default Note;
