@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+boto3
+scikit-learn
+beautifulsoup4
+requests
+sentence-transformers
+torch
+transformers
