@@ -1,113 +1,129 @@
 from flask import Flask, request, jsonify
+import os
 import requests
 import json
-from PIL import Image, ImageDraw, ImageFont
+import cloudinary
+import cloudinary.uploader
+from pymongo import MongoClient
+from datetime import datetime, timezone, time
 import openai
 
 app = Flask(__name__)
 
-# 🔹 API Keys (Replace with your own keys)
+# 🔹 API Keys (Replace with your own)
 GOOGLE_VISION_API_KEY = "AIzaSyCNq-FHlIDPETPHEwqRwQuF3CLhVY1yEU4"
 VISION_API_URL = f"https://vision.googleapis.com/v1/images:annotate?key={GOOGLE_VISION_API_KEY}"
-openai.api_key = "sk-proj SWBHXW0eAu5WiqO6CmImT3BlbkFJUjkPjUiFJyhpZDwtaLyo"
+openai.api_key = "sk-proj-SWBHXW0eAu5WiqO6CmImT3BlbkFJUjkPjUiFJyhpZDwtaLyo"
 
+# 🔹 MongoDB Connection
+client = MongoClient("mongodb+srv://sowdarjya:kXmIwoEWe9E8xaDq@cluster0.8idcvwz.mongodb.net/Note-ORG?retryWrites=true&w=majority")
+db = client["Note-ORG"]
+collection = db["notes"]
 
-def extract_text_and_coordinates(response):
-    text_data = []
-    for annotation in response['responses'][0]['textAnnotations'][1:]:  # Skip full text entry
-        text_data.append({
-            'text': annotation['description'],
-            'boundingBox': annotation['boundingPoly']['vertices']
-        })
-    return text_data
+# 🔹 Configure Cloudinary
+cloudinary.config(
+    cloud_name="dgyv898dh",
+    api_key="493972163223167",
+    api_secret="tgCJbpBJwOUnRe-zoLSFHBZVGcY"
+)
 
-
-def get_image_size(text_data):
-    max_x = max([max(vertex['x'] for vertex in item['boundingBox']) for item in text_data], default=500)
-    max_y = max([max(vertex['y'] for vertex in item['boundingBox']) for item in text_data], default=500)
-    return (max_x + 20, max_y + 20)
-
-
-def reconstruct_document(text_data):
-    image_size = get_image_size(text_data)
-    image = Image.new('RGB', image_size, 'white')
-    draw = ImageDraw.Draw(image)
-    
-    try:
-        font = ImageFont.truetype("arial.ttf", 20)
-    except IOError:
-        font = ImageFont.load_default()
-    
-    for item in text_data:
-        box = item['boundingBox']
-        text = item['text']
-        position = (box[0]['x'], box[0]['y'])
-        draw.text(position, text, fill='black', font=font)
-    
-    image.save("raw_ocr_output.png")
-    print("Reconstructed image saved as raw_ocr_output.png")
-
+def extract_text_from_image(image_url):
+    """Extracts text from an image using Google Vision API."""
+    payload = {
+        "requests": [{
+            "image": {"source": {"imageUri": image_url}},
+            "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]
+        }]
+    }
+    response = requests.post(VISION_API_URL, json=payload)
+    response_json = response.json()
+    return response_json['responses'][0].get('textAnnotations', [{}])[0].get('description', '')
 
 def correct_text_with_openai(text):
-    client = openai.OpenAI(api_key="sk-proj SWBHXW0eAu5WiqO6CmImT3BlbkFJUjkPjUiFJyhpZDwtaLyo")  # ✅ Pass API key here
+    """Uses OpenAI GPT to fix OCR errors."""
+    client = openai.OpenAI(api_key="sk-proj-SWBHXW0eAu5WiqO6CmImT3BlbkFJUjkPjUiFJyhpZDwtaLyo")
 
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-3.5-turbo",
         messages=[
             {"role": "system", "content": "You are an expert in correcting OCR errors."},
-            {"role": "user", "content": f"Fix OCR mistakes in this text: {text}"}
+            {"role": "user", "content": f"Fix OCR mistakes in this structured text:\n{text}"}
         ]
     )
     return response.choices[0].message.content
 
 def save_text_to_file(filename, text):
-    with open(filename, "w", encoding="utf-8") as file:
-        file.write(text)
-    print(f"Text saved as {filename}")
+    """Saves extracted text to a file."""
+    with open(filename, "w", encoding="utf-8") as f:
+        f.write(text)
 
+def upload_to_cloudinary(filename):
+    """Uploads a file to Cloudinary and returns the URL."""
+    response = cloudinary.uploader.upload(filename, resource_type="raw")
+    return response["url"]
 
-@app.route('/process_image', methods=['POST'])
-def process_image():
+@app.route('/process_files', methods=['POST'])
+def process_files():
+    """Processes all files uploaded between 12:00 AM and 8:00 PM."""
     try:
-        data = request.get_json()
-        image_url = data.get("image_url")
+        today = datetime.now().date()
+        start_of_day = datetime.combine(today, time(0, 0, 0))
+        end_of_8pm = datetime.combine(today, time(23, 59, 59))
 
-        if not image_url:
-            return jsonify({"error": "Missing image URL"}), 400
+        query = {"uploadedAt": {"$gte": start_of_day, "$lt": end_of_8pm}}
+        files = list(collection.find(query))
+        if not files:
+            return jsonify({"message": "No files to process"}), 200
 
-        # Send request to Google Vision API
-        payload = {
-            "requests": [{
-                "image": {"source": {"imageUri": image_url}},
-                "features": [{"type": "DOCUMENT_TEXT_DETECTION"}]
-            }]
-        }
-        response = requests.post(VISION_API_URL, json=payload)
-        response_json = response.json()
+        results = []
 
-        # Extract text data
-        extracted_text = response_json.get("responses", [{}])[0].get("fullTextAnnotation", {}).get("text", "")
-        text_data = extract_text_and_coordinates(response_json)
-        
-        # Save raw OCR output
-        save_text_to_file("raw_text.txt", extracted_text)
-        
-        # Reconstruct document
-        reconstruct_document(text_data)
-        
-        # Correct text with OpenAI
-        corrected_text = correct_text_with_openai(extracted_text)
-        save_text_to_file("corrected_text.txt", corrected_text)
+        for file in files:
+            user_id = file["userId"]
+            subject = file["subject"].replace(" ", "_")  # Avoid spaces in filename
+            date_str = today.strftime("%Y-%m-%d")
+            file_url = file["fileUrl"]
 
-        return jsonify({
-            "message": "Processing complete. Files saved.",
-            "raw_text": extracted_text,
-            "corrected_text": corrected_text
-        })
-    
+            # Define filenames
+            raw_filename = f"{user_id}_{subject}_{date_str}_raw.txt"
+            corrected_filename = f"{user_id}_{subject}_{date_str}_corrected.txt"
+
+            # Extract text using Google Vision API
+            extracted_text = extract_text_from_image(file_url)
+            save_text_to_file(raw_filename, extracted_text)
+
+            # Correct text with OpenAI
+            corrected_text = correct_text_with_openai(extracted_text)
+            save_text_to_file(corrected_filename, corrected_text)
+
+            # Upload files to Cloudinary
+            raw_url = upload_to_cloudinary(raw_filename)
+            corrected_url = upload_to_cloudinary(corrected_filename)
+
+            # Update the database with extracted details
+            collection.update_one(
+                {"_id": file["_id"]},
+                {"$set": {
+                    "filename": raw_filename,
+                    "raw_text_url": raw_url,
+                    "corrected_text_url": corrected_url
+                }}
+            )
+
+            results.append({
+                "userId": user_id,
+                "filename": raw_filename,
+                "raw_text_url": raw_url,
+                "corrected_text_url": corrected_url
+            })
+
+            # Cleanup local files
+            os.remove(raw_filename)
+            os.remove(corrected_filename)
+
+        return jsonify({"message": "Processing complete", "results": results})
+
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 
 if __name__ == '__main__':
     app.run(debug=True)
