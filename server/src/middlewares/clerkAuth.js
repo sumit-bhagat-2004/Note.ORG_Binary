@@ -1,12 +1,10 @@
 import { ClerkExpressWithAuth } from "@clerk/clerk-sdk-node";
 
-const clerkAuth = ClerkExpressWithAuth();
+export const requireAuth = ClerkExpressWithAuth((req, res, next) => {
+  if (!req.auth?.userId) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
 
-export const protect = (req, res, next) => {
-  clerkAuth(req, res, () => {
-    if (!req.auth.userId) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    next();
-  });
-};
+  req.userId = req.auth.userId;
+  next();
+});

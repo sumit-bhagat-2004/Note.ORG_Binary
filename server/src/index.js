@@ -2,7 +2,7 @@ import express from "express";
 import dotenv from "dotenv";
 import cors from "cors";
 import connectDB from "./db/db.js";
-import userRoutes from "./routes/user.routes.js";
+// import userRoutes from "./routes/user.routes.js";
 import notesRoutes from "./routes/notes.routes.js";
 
 dotenv.config();
@@ -24,7 +24,7 @@ app.use(
   })
 );
 
-app.use("/api/users", userRoutes);
+// app.use("/api/users", userRoutes);
 app.use("/api/notes", notesRoutes);
 
 app.get("/", (req, res) => {

@@ -15,6 +15,10 @@ const noteSchema = new mongoose.Schema(
       enum: ["image/jpeg", "image/png", "application/pdf"],
       required: true,
     },
+    subject: {
+      type: String,
+      required: true,
+    },
     uploadedAt: {
       type: Date,
       default: Date.now,
