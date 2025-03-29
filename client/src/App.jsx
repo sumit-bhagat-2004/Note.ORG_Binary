@@ -3,6 +3,7 @@ import { Route, Routes } from "react-router-dom";
 import Home from "./pages/Home";
 import Navbar from "./components/Navbar";
 import UploadNotes from "./pages/UploadPage";
+import WalletPage from "./pages/WalletPage";
 
 const App = () => {
   return (
@@ -11,6 +12,7 @@ const App = () => {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/upload" element={<UploadNotes />} />
+        <Route path="/wallet" element={<WalletPage />} />
       </Routes>
     </div>
   );

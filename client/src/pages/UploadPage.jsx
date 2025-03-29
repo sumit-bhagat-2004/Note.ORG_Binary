@@ -1,93 +1,383 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useRef, useCallback } from "react";
 import { useDropzone } from "react-dropzone";
 import axios from "axios";
 import { useUser } from "@clerk/clerk-react";
-import { toast } from "react-hot-toast";
 
-const UploadNotes = () => {
-  const { user } = useUser();
+const NoteUpload = () => {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
-  const [uploading, setUploading] = useState(false);
+  const [subject, setSubject] = useState("");
+  const [isDrawing, setIsDrawing] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const { user, isLoaded } = useUser();
+
+  const canvasRef = useRef(null);
+  const canvasCtxRef = useRef(null);
+  const drawingLayerRef = useRef(null);
+  const drawingCtxRef = useRef(null);
+  const startX = useRef(0);
+  const startY = useRef(0);
 
   const onDrop = useCallback((acceptedFiles) => {
-    const uploadedFile = acceptedFiles[0];
-    setFile(uploadedFile);
-    setPreview(URL.createObjectURL(uploadedFile));
-    toast.success("File selected successfully!");
+    if (acceptedFiles.length === 0) return;
+
+    const selectedFile = acceptedFiles[0];
+    setFile(selectedFile);
+
+    if (
+      !["image/jpeg", "image/png", "application/pdf"].includes(
+        selectedFile.type
+      )
+    ) {
+      setError("File type not supported. Please upload JPG, PNG or PDF.");
+      return;
+    }
+    setError("");
+
+    const previewUrl = URL.createObjectURL(selectedFile);
+    setPreview(previewUrl);
+
+    if (selectedFile.type === "application/pdf") {
+      renderPdfPreview(previewUrl);
+    }
   }, []);
 
-  const { getRootProps, getInputProps } = useDropzone({
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: "image/*,application/pdf",
+    accept: {
+      "image/jpeg": [".jpg", ".jpeg"],
+      "image/png": [".png"],
+      "application/pdf": [".pdf"],
+    },
     maxFiles: 1,
   });
 
-  const handleUpload = async () => {
-    if (!file) return toast.error("No file selected!");
-    if (!user) return toast.error("You must be logged in to upload!");
+  const renderPdfPreview = async (url) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    canvasCtxRef.current = ctx;
+    const img = new Image();
+    img.src = "/api/placeholder/400/600";
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+      setupDrawingLayer();
+    };
+  };
 
-    const formData = new FormData();
-    formData.append("file", file);
-    formData.append("userId", user.id);
+  const handleImageLoad = (e) => {
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    canvasCtxRef.current = ctx;
 
-    setUploading(true);
+    canvas.width = e.target.width;
+    canvas.height = e.target.height;
 
-    try {
-      const response = await axios.post(
-        "http://localhost:8000/api/notes/upload",
-        formData,
-        {
-          headers: { "Content-Type": "multipart/form-data" },
-        }
-      );
+    ctx.drawImage(e.target, 0, 0);
 
-      toast.success("Upload successful!");
-    } catch (error) {
-      console.error("Upload error:", error);
-      toast.error("Upload failed!");
-    } finally {
-      setUploading(false);
+    setupDrawingLayer();
+  };
+
+  const setupDrawingLayer = () => {
+    const canvas = canvasRef.current;
+    const drawingLayer = drawingLayerRef.current;
+
+    if (!drawingLayer) return;
+
+    drawingLayer.width = canvas.width;
+    drawingLayer.height = canvas.height;
+
+    const drawingCtx = drawingLayer.getContext("2d");
+    drawingCtxRef.current = drawingCtx;
+
+    drawingCtx.strokeStyle = "red";
+    drawingCtx.lineWidth = 3;
+    drawingCtx.lineCap = "round";
+    drawingCtx.lineJoin = "round";
+  };
+
+  const startDrawing = (e) => {
+    if (!isDrawing) return;
+
+    const drawingLayer = drawingLayerRef.current;
+    if (!drawingLayer) return;
+
+    const rect = drawingLayer.getBoundingClientRect();
+    startX.current = e.clientX - rect.left;
+    startY.current = e.clientY - rect.top;
+
+    const ctx = drawingCtxRef.current;
+    ctx.beginPath();
+    ctx.moveTo(startX.current, startY.current);
+  };
+
+  const draw = (e) => {
+    if (!isDrawing) return;
+
+    const drawingLayer = drawingLayerRef.current;
+    if (!drawingLayer) return;
+
+    const rect = drawingLayer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const ctx = drawingCtxRef.current;
+    ctx.lineTo(x, y);
+    ctx.stroke();
+  };
+
+  const endDrawing = () => {
+    if (!isDrawing) return;
+
+    const ctx = drawingCtxRef.current;
+    if (ctx) {
+      ctx.closePath();
     }
   };
 
+  const toggleDrawing = () => {
+    setIsDrawing(!isDrawing);
+  };
+
+  const clearDrawing = () => {
+    const drawingLayer = drawingLayerRef.current;
+    const ctx = drawingCtxRef.current;
+
+    if (drawingLayer && ctx) {
+      ctx.clearRect(0, 0, drawingLayer.width, drawingLayer.height);
+    }
+  };
+
+  const combineCanvases = () => {
+    if (!canvasRef.current || !drawingLayerRef.current) return null;
+
+    const combinedCanvas = document.createElement("canvas");
+    combinedCanvas.width = canvasRef.current.width;
+    combinedCanvas.height = canvasRef.current.height;
+
+    const ctx = combinedCanvas.getContext("2d");
+
+    ctx.drawImage(canvasRef.current, 0, 0);
+
+    ctx.drawImage(drawingLayerRef.current, 0, 0);
+
+    return combinedCanvas;
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    if (!file || !subject) {
+      setError("Please select a file and enter a subject");
+      return;
+    }
+
+    if (!isLoaded || !user) {
+      setError("Authentication information not available");
+      return;
+    }
+
+    setIsLoading(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const combinedCanvas = combineCanvases();
+
+      if (combinedCanvas) {
+        combinedCanvas.toBlob(async (blob) => {
+          const combinedFile = new File([blob], file.name, { type: file.type });
+
+          const formData = new FormData();
+          formData.append("file", combinedFile);
+          formData.append("subject", subject);
+          formData.append("userId", user.id);
+
+          const response = await axios.post(
+            "http://localhost:8000/api/notes/upload",
+            formData,
+            {
+              headers: {
+                "Content-Type": "multipart/form-data",
+              },
+            }
+          );
+
+          setMessage("Notes uploaded successfully!");
+          setIsLoading(false);
+
+          setFile(null);
+          setPreview(null);
+          setSubject("");
+          clearDrawing();
+        }, file.type);
+      } else {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("subject", subject);
+        formData.append("userId", user.id);
+        const response = await axios.post("/api/notes/upload", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        setMessage("Notes uploaded successfully! (without annotations)");
+        setIsLoading(false);
+      }
+    } catch (error) {
+      setError(
+        "Error uploading notes: " +
+          (error.response?.data?.message || error.message)
+      );
+      setIsLoading(false);
+    }
+  };
+
+  if (!isLoaded) {
+    return (
+      <div className="max-w-4xl mx-auto p-6">Loading user information...</div>
+    );
+  }
+
   return (
-    <div className="max-w-lg mx-auto p-6 bg-white shadow-lg rounded-lg">
-      <h2 className="text-xl font-semibold mb-4">Upload Your Notes</h2>
+    <div className="max-w-4xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Upload Notes</h1>
 
-      <div
-        {...getRootProps()}
-        className="border-dashed border-2 border-gray-400 p-6 text-center cursor-pointer"
-      >
-        <input {...getInputProps()} />
-        <p>Drag & drop your notes here, or click to select</p>
-      </div>
-
-      {preview && (
-        <div className="mt-4">
-          {file.type.startsWith("image/") ? (
-            <img
-              src={preview}
-              alt="Preview"
-              className="w-full h-96 object-cover rounded-lg"
-            />
-          ) : (
-            <p className="text-sm font-medium text-gray-600">
-              PDF selected: {file.name}
-            </p>
-          )}
+      {!user ? (
+        <div className="bg-yellow-100 border-l-4 border-yellow-500 p-4 mb-6">
+          <p className="text-yellow-700">
+            You must be signed in to upload notes.
+          </p>
         </div>
-      )}
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="subject" className="block text-sm font-medium mb-1">
+              Subject
+            </label>
+            <input
+              type="text"
+              id="subject"
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              className="w-full p-2 border rounded-md"
+              placeholder="Enter subject name"
+              required
+            />
+          </div>
 
-      <button
-        onClick={handleUpload}
-        disabled={uploading}
-        className="mt-4 cursor-pointer bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:bg-gray-400"
-      >
-        {uploading ? "Uploading..." : "Upload Notes"}
-      </button>
+          <div
+            {...getRootProps()}
+            className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors
+              ${
+                isDragActive
+                  ? "border-blue-500 bg-blue-50"
+                  : "border-gray-300 hover:border-blue-400"
+              }`}
+          >
+            <input {...getInputProps()} />
+            {isDragActive ? (
+              <p className="text-blue-500">Drop the file here...</p>
+            ) : (
+              <div>
+                <p className="mb-2">
+                  Drag & drop a file here, or click to select
+                </p>
+                <p className="text-sm text-gray-500">
+                  Supported formats: JPG, PNG, PDF
+                </p>
+              </div>
+            )}
+          </div>
+
+          {preview && (
+            <div className="border rounded-md p-4">
+              <h3 className="font-medium mb-3">Preview & Mark Equations</h3>
+
+              <div className="relative inline-block">
+                <canvas
+                  ref={canvasRef}
+                  className="border"
+                  style={{
+                    display:
+                      file?.type === "application/pdf" ? "block" : "none",
+                  }}
+                />
+
+                {file?.type.startsWith("image/") && (
+                  <img
+                    src={preview}
+                    alt="Preview"
+                    className="max-w-full"
+                    style={{ display: "block" }}
+                    onLoad={handleImageLoad}
+                  />
+                )}
+
+                <canvas
+                  ref={drawingLayerRef}
+                  className="absolute top-0 left-0 z-10"
+                  style={{ display: "block" }}
+                  onMouseDown={startDrawing}
+                  onMouseMove={draw}
+                  onMouseUp={endDrawing}
+                  onMouseLeave={endDrawing}
+                />
+              </div>
+
+              <div className="mt-3 flex gap-3">
+                <button
+                  type="button"
+                  onClick={toggleDrawing}
+                  className={`px-4 py-2 rounded-md ${
+                    isDrawing
+                      ? "bg-red-600 text-white"
+                      : "bg-blue-600 text-white"
+                  }`}
+                >
+                  {isDrawing ? "Stop Drawing" : "Start Drawing"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearDrawing}
+                  className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300"
+                >
+                  Clear Drawings
+                </button>
+              </div>
+
+              <p className="mt-2 text-sm text-gray-600">
+                Click "Start Drawing" and mark equations or important areas on
+                your notes. Click "Stop Drawing" when done.
+              </p>
+            </div>
+          )}
+
+          {error && <p className="text-red-600">{error}</p>}
+          {message && <p className="text-green-600">{message}</p>}
+
+          <button
+            type="submit"
+            disabled={isLoading || !file}
+            className={`px-6 py-2 rounded-md bg-blue-600 text-white font-medium
+              ${
+                isLoading || !file
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-blue-700"
+              }`}
+          >
+            {isLoading ? "Uploading..." : "Upload Notes"}
+          </button>
+        </form>
+      )}
     </div>
   );
 };
 
-export default UploadNotes;
+export default NoteUpload;

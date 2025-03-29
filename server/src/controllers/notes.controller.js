@@ -3,11 +3,11 @@ import Note from "../models/notes.models.js";
 
 export const uploadNotes = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, subject } = req.body;
     const file = req.file;
 
-    if (!file) {
-      return res.status(400).json({ message: "No file uploaded" });
+    if (!file || !subject) {
+      return res.status(400).json({ message: "All fields are mandatory" });
     }
 
     const uploadResult = await cloudinary.uploader
@@ -24,6 +24,7 @@ export const uploadNotes = async (req, res) => {
             userId,
             fileUrl: result.secure_url,
             fileType: file.mimetype,
+            subject,
           });
 
           await note.save();
@@ -33,6 +34,7 @@ export const uploadNotes = async (req, res) => {
               id: note._id,
               fileUrl: note.fileUrl,
               fileType: note.fileType,
+              subject,
               uploadedAt: note.uploadedAt,
             },
           });
