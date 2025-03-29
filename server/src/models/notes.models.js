@@ -10,6 +10,15 @@ const noteSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    filename: {
+      type: String,
+    },
+    raw_text_url: {
+      type: String,
+    },
+    corrected_text_url: {
+      type: String,
+    },
     fileType: {
       type: String,
       enum: ["image/jpeg", "image/png", "application/pdf"],
