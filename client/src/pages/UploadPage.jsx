@@ -3,7 +3,7 @@ import { useDropzone } from "react-dropzone";
 import axios from "axios";
 import { useUser } from "@clerk/clerk-react";
 
-const NoteUpload = () => {
+const uploadPage = () => {
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [subject, setSubject] = useState("");
@@ -11,6 +11,9 @@ const NoteUpload = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+  const [rectangles, setRectangles] = useState([]);
+  const [startX, setStartX] = useState(0);
+  const [startY, setStartY] = useState(0);
 
   const { user, isLoaded } = useUser();
 
@@ -18,8 +21,6 @@ const NoteUpload = () => {
   const canvasCtxRef = useRef(null);
   const drawingLayerRef = useRef(null);
   const drawingCtxRef = useRef(null);
-  const startX = useRef(0);
-  const startY = useRef(0);
 
   const onDrop = useCallback((acceptedFiles) => {
     if (acceptedFiles.length === 0) return;
@@ -43,6 +44,9 @@ const NoteUpload = () => {
     if (selectedFile.type === "application/pdf") {
       renderPdfPreview(previewUrl);
     }
+
+    // Reset rectangles when a new file is dropped
+    setRectangles([]);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -93,29 +97,23 @@ const NoteUpload = () => {
 
     const drawingCtx = drawingLayer.getContext("2d");
     drawingCtxRef.current = drawingCtx;
-
-    drawingCtx.strokeStyle = "red";
-    drawingCtx.lineWidth = 3;
-    drawingCtx.lineCap = "round";
-    drawingCtx.lineJoin = "round";
   };
 
-  const startDrawing = (e) => {
+  const handleMouseDown = (e) => {
     if (!isDrawing) return;
 
     const drawingLayer = drawingLayerRef.current;
     if (!drawingLayer) return;
 
     const rect = drawingLayer.getBoundingClientRect();
-    startX.current = e.clientX - rect.left;
-    startY.current = e.clientY - rect.top;
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
 
-    const ctx = drawingCtxRef.current;
-    ctx.beginPath();
-    ctx.moveTo(startX.current, startY.current);
+    setStartX(x);
+    setStartY(y);
   };
 
-  const draw = (e) => {
+  const handleMouseMove = (e) => {
     if (!isDrawing) return;
 
     const drawingLayer = drawingLayerRef.current;
@@ -126,17 +124,55 @@ const NoteUpload = () => {
     const y = e.clientY - rect.top;
 
     const ctx = drawingCtxRef.current;
-    ctx.lineTo(x, y);
-    ctx.stroke();
+
+    // Clear the drawing layer and redraw all saved rectangles
+    redrawCanvas();
+
+    // Draw the current rectangle
+    ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+    ctx.fillRect(startX, startY, x - startX, y - startY);
+    ctx.strokeStyle = "red";
+    ctx.strokeRect(startX, startY, x - startX, y - startY);
   };
 
-  const endDrawing = () => {
+  const handleMouseUp = (e) => {
     if (!isDrawing) return;
 
+    const drawingLayer = drawingLayerRef.current;
+    if (!drawingLayer) return;
+
+    const rect = drawingLayer.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    // Save the rectangle
+    setRectangles((prev) => [
+      ...prev,
+      {
+        x: startX,
+        y: startY,
+        width: x - startX,
+        height: y - startY,
+      },
+    ]);
+  };
+
+  const redrawCanvas = () => {
+    const drawingLayer = drawingLayerRef.current;
     const ctx = drawingCtxRef.current;
-    if (ctx) {
-      ctx.closePath();
-    }
+
+    if (!drawingLayer || !ctx) return;
+
+    // Clear the canvas
+    ctx.clearRect(0, 0, drawingLayer.width, drawingLayer.height);
+
+    // Redraw all saved rectangles
+    rectangles.forEach((rect) => {
+      ctx.fillStyle = "rgba(255, 0, 0, 0.3)";
+      ctx.fillRect(rect.x, rect.y, rect.width, rect.height);
+      ctx.strokeStyle = "red";
+      ctx.strokeRect(rect.x, rect.y, rect.width, rect.height);
+    });
   };
 
   const toggleDrawing = () => {
@@ -144,12 +180,20 @@ const NoteUpload = () => {
   };
 
   const clearDrawing = () => {
-    const drawingLayer = drawingLayerRef.current;
-    const ctx = drawingCtxRef.current;
+    setRectangles([]);
+    redrawCanvas();
+  };
 
-    if (drawingLayer && ctx) {
-      ctx.clearRect(0, 0, drawingLayer.width, drawingLayer.height);
-    }
+  const saveCoordinates = () => {
+    const dataStr =
+      "data:text/json;charset=utf-8," +
+      encodeURIComponent(JSON.stringify(rectangles, null, 2));
+    const downloadAnchor = document.createElement("a");
+    downloadAnchor.setAttribute("href", dataStr);
+    downloadAnchor.setAttribute("download", "coordinates.json");
+    document.body.appendChild(downloadAnchor);
+    downloadAnchor.click();
+    document.body.removeChild(downloadAnchor);
   };
 
   const combineCanvases = () => {
@@ -162,7 +206,6 @@ const NoteUpload = () => {
     const ctx = combinedCanvas.getContext("2d");
 
     ctx.drawImage(canvasRef.current, 0, 0);
-
     ctx.drawImage(drawingLayerRef.current, 0, 0);
 
     return combinedCanvas;
@@ -197,6 +240,9 @@ const NoteUpload = () => {
           formData.append("subject", subject);
           formData.append("userId", user.id);
 
+          // Also include the rectangle coordinates
+          formData.append("coordinates", JSON.stringify(rectangles));
+
           const response = await axios.post(
             "http://localhost:8000/api/notes/upload",
             formData,
@@ -207,26 +253,30 @@ const NoteUpload = () => {
             }
           );
 
-          setMessage("Notes uploaded successfully!");
+          setMessage("Notes and equation markers uploaded successfully!");
           setIsLoading(false);
 
           setFile(null);
           setPreview(null);
           setSubject("");
-          clearDrawing();
+          setRectangles([]);
         }, file.type);
       } else {
         const formData = new FormData();
         formData.append("file", file);
         formData.append("subject", subject);
         formData.append("userId", user.id);
+
+        // Include coordinates even without canvas
+        formData.append("coordinates", JSON.stringify(rectangles));
+
         const response = await axios.post("/api/notes/upload", formData, {
           headers: {
             "Content-Type": "multipart/form-data",
           },
         });
 
-        setMessage("Notes uploaded successfully! (without annotations)");
+        setMessage("Notes uploaded successfully!");
         setIsLoading(false);
       }
     } catch (error) {
@@ -322,11 +372,14 @@ const NoteUpload = () => {
                 <canvas
                   ref={drawingLayerRef}
                   className="absolute top-0 left-0 z-10"
-                  style={{ display: "block" }}
-                  onMouseDown={startDrawing}
-                  onMouseMove={draw}
-                  onMouseUp={endDrawing}
-                  onMouseLeave={endDrawing}
+                  style={{
+                    display: "block",
+                    cursor: isDrawing ? "crosshair" : "default",
+                  }}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={redrawCanvas}
                 />
               </div>
 
@@ -340,7 +393,7 @@ const NoteUpload = () => {
                       : "bg-blue-600 text-white"
                   }`}
                 >
-                  {isDrawing ? "Stop Drawing" : "Start Drawing"}
+                  {isDrawing ? "Stop Marking" : "Start Marking"}
                 </button>
 
                 <button
@@ -348,13 +401,22 @@ const NoteUpload = () => {
                   onClick={clearDrawing}
                   className="px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300"
                 >
-                  Clear Drawings
+                  Clear Markers
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveCoordinates}
+                  className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
+                >
+                  Save Coordinates
                 </button>
               </div>
 
               <p className="mt-2 text-sm text-gray-600">
-                Click "Start Drawing" and mark equations or important areas on
-                your notes. Click "Stop Drawing" when done.
+                Click "Start Marking" and draw rectangles around equations or
+                important areas on your notes. Click "Stop Marking" when done.
+                You can download the coordinates as JSON.
               </p>
             </div>
           )}
@@ -380,4 +442,4 @@ const NoteUpload = () => {
   );
 };
 
-export default NoteUpload;
+export default uploadPage;
