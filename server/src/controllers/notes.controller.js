@@ -57,3 +57,16 @@ export const uploadNotes = async (req, res) => {
     res.status(500).json({ message: "Error uploading notes" });
   }
 };
+
+export const getNotesWithCorrectedText = async (req, res) => {
+  try {
+    const notes = await Note.find({
+      corrected_text_url: { $exists: true, $ne: "" },
+    });
+    res.status(200).json(notes);
+  } catch (error) {
+    res
+      .status(500)
+      .json({ message: "Error fetching notes", error: error.message });
+  }
+};

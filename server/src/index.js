@@ -4,6 +4,7 @@ import cors from "cors";
 import connectDB from "./db/db.js";
 // import userRoutes from "./routes/user.routes.js";
 import notesRoutes from "./routes/notes.routes.js";
+import walletRoutes from "./routes/wallet.routes.js";
 
 dotenv.config();
 const PORT = process.env.PORT || 8000;
@@ -26,6 +27,7 @@ app.use(
 
 // app.use("/api/users", userRoutes);
 app.use("/api/notes", notesRoutes);
+app.use("/api/wallet", walletRoutes);
 
 app.get("/", (req, res) => {
   res.send("Hello World!");
