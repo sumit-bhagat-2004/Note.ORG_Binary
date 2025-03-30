@@ -17,7 +17,7 @@ const Wallet = () => {
 
     try {
       const { data } = await axios.post(
-        "http://localhost:8000/api/wallet/add-credits",
+        "https://note-org-binary.onrender.com/api/wallet/add-credits",
         {
           userId: user.id,
           amount,

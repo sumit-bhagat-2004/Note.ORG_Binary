@@ -4,7 +4,7 @@ const NotesList = () => {
   const [notes, setNotes] = useState([]);
 
   useEffect(() => {
-    fetch("http://localhost:8000/api/notes/get-notes")
+    fetch("https://note-org-binary.onrender.com/api/notes/get-notes")
       .then((res) => res.json())
       .then((data) => setNotes(data))
       .catch((err) => console.error("Error fetching notes:", err));

@@ -244,7 +244,7 @@ const UploadPage = () => {
           formData.append("coordinates", JSON.stringify(rectangles));
 
           const response = await axios.post(
-            "http://localhost:8000/api/notes/upload",
+            "https://note-org-binary.onrender.com/api/notes/upload",
             formData,
             {
               headers: {
