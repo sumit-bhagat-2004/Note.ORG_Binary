@@ -1,0 +1,22 @@
+
+
+1. ISRO's Lunar Missions
+   - ISRO, the Indian Space Research Organisation, has launched several lunar missions as part of the Chandrayaan program. These missions aim to explore the Moon's surface and gather scientific data.
+
+2. Chandrayaan-2 Overview
+   - The second lunar mission, Chandrayaan-2, was launched on July 22, 2019. While the orbiter successfully entered lunar orbit and continues to function, the mission faced challenges with its lander.
+   - The Vikram lander, which was part of the mission, lost contact with ground control during its descent, just 2.1 kilometers above the lunar surface, on September 6, 2019.
+   - Despite the loss of the lander, the orbiter remains operational, providing valuable data about the Moon.
+
+3. Rebounding with Chandrayaan-3
+   - Despite the setbacks with Chandrayaan-2, ISRO announced plans for its third lunar mission, Chandrayaan-3, which is focused on landing on the Moon.
+   - The mission aims to incorporate improvements and lessons learned from the previous mission's challenges.
+   - Chandrayaan-3 is expected to consist of a lander and a rover, without an orbiter, leveraging the successful components of Chandrayaan-2.
+
+4. Learning from Failures
+   - The experience gained from these missions has been invaluable, leading to significant improvements in subsequent missions.
+   - ISRO has relied on these learnings to refine their strategies and procedures, enhancing their technological capabilities and mission planning.
+
+5. ISRO's Commitment to Space Exploration
+   - Overall, ISRO's lunar missions represent the organization's commitment to pushing the boundaries of space exploration.
+   - Through perseverance and innovation, ISRO continues to contribute to global scientific knowledge and inspire future generations in the field of space research.
