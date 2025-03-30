@@ -15,6 +15,12 @@ const Navbar = () => {
         {isSignedIn ? (
           <>
             <Link
+              to="/notes"
+              className="bg-white text-blue-600 px-4 py-2 rounded-lg shadow-md hover:bg-gray-200"
+            >
+              Notes
+            </Link>
+            <Link
               to="/upload"
               className="bg-white text-blue-600 px-4 py-2 rounded-lg shadow-md hover:bg-gray-200"
             >

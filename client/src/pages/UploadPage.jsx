@@ -270,11 +270,15 @@ const UploadPage = () => {
         // Include coordinates even without canvas
         formData.append("coordinates", JSON.stringify(rectangles));
 
-        const response = await axios.post("/api/notes/upload", formData, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        });
+        const response = await axios.post(
+          "http://localhost:8000/api/notes/upload",
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+            },
+          }
+        );
 
         setMessage("Notes uploaded successfully!");
         setIsLoading(false);
