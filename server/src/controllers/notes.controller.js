@@ -3,11 +3,20 @@ import Note from "../models/notes.models.js";
 
 export const uploadNotes = async (req, res) => {
   try {
-    const { userId, subject } = req.body;
+    const { userId, subject, coordinates } = req.body;
     const file = req.file;
 
     if (!file || !subject) {
       return res.status(400).json({ message: "All fields are mandatory" });
+    }
+
+    let parsedCoordinates = [];
+    if (coordinates) {
+      try {
+        parsedCoordinates = JSON.parse(coordinates);
+      } catch (error) {
+        console.error("Error parsing coordinates:", error);
+      }
     }
 
     const uploadResult = await cloudinary.uploader
@@ -25,6 +34,7 @@ export const uploadNotes = async (req, res) => {
             fileUrl: result.secure_url,
             fileType: file.mimetype,
             subject,
+            equationCoordinates: parsedCoordinates,
           });
 
           await note.save();
@@ -36,12 +46,14 @@ export const uploadNotes = async (req, res) => {
               fileType: note.fileType,
               subject,
               uploadedAt: note.uploadedAt,
+              equationCoordinates: note.equationCoordinates,
             },
           });
         }
       )
       .end(file.buffer);
   } catch (error) {
+    console.error("Error in uploadNotes:", error);
     res.status(500).json({ message: "Error uploading notes" });
   }
 };
