@@ -13,7 +13,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: "https://note-org-binary.vercel.app/",
+    origin: "https://note-org-binary.vercel.app",
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
